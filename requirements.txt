@@ -1,0 +1,22 @@
+# AI Multi-Agent Research and Analysis System
+# ============================================
+# Pinned to stable, mutually compatible versions (Python 3.12)
+
+# ── Core AI / LangGraph stack ─────────────────────────────────────────────────
+langgraph==1.2.11
+langchain==1.4.2
+langchain-core==1.6.3
+langchain-google-genai==4.4.0
+
+# ── Search ────────────────────────────────────────────────────────────────────
+ddgs>=1.0.0                    # replaces duckduckgo-search (renamed)
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+streamlit==1.64.0
+
+# ── Environment / configuration ───────────────────────────────────────────────
+python-dotenv==1.2.3
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.3.5
+pytest-mock==3.14.0
