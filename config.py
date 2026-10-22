@@ -60,7 +60,7 @@ GOOGLE_API_KEY: str | None = get_secret("GEMINI_API_KEY", "GOOGLE_API_KEY")
 SERPER_API_KEY: str | None = get_secret("SERPER_API_KEY")
 
 # ── Model configuration ───────────────────────────────────────────────────────
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 MODEL_TEMPERATURE: float = float(os.getenv("MODEL_TEMPERATURE", "0.3"))
 MODEL_MAX_TOKENS: int = int(os.getenv("MODEL_MAX_TOKENS", "4096"))
 
