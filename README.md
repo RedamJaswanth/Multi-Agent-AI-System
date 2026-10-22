@@ -1,6 +1,6 @@
 # 🤖 AI Multi-Agent Research and Analysis System
 
-[![Live Demo](https://img.shields.io/badge/Streamlit-Live%20Demo-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://multi-agent-ai-system.streamlit.app/)
+[![Live Demo](https://img.shields.io/badge/Streamlit-Live%20Demo-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://multi-agent-ai-system-zgincdwrxp7vsdwe9fcrkc.streamlit.app/)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RedamJaswanth/Multi-Agent-AI-System)
 
 A production-style multi-agent AI system built with **LangGraph & Microsoft AutoGen**, **Google Gemini 2.5 Flash**, **Serper Google Search API**, **DuckDuckGo**, and **Streamlit**. The system intelligently routes user tasks through a pipeline of specialised agents — only invoking web research when genuinely required, with quota safeguards and session limits.
@@ -8,7 +8,7 @@ A production-style multi-agent AI system built with **LangGraph & Microsoft Auto
 ---
 
 ### 🌐 Live Demo
-👉 **[Open Live App on Streamlit Community Cloud](https://multi-agent-ai-system.streamlit.app/)**
+👉 **[Open Live App on Streamlit Community Cloud](https://multi-agent-ai-system-zgincdwrxp7vsdwe9fcrkc.streamlit.app/)**
 
 ---
 
