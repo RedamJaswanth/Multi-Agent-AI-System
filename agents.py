@@ -63,11 +63,26 @@ def _get_llm() -> ChatGoogleGenerativeAI:
 def _call_llm(llm: ChatGoogleGenerativeAI, system: str, human: str) -> str:
     """Send a system + human prompt to the model and return the text reply.
 
-    langchain-google-genai 4.x may return response.content as a list of
-    content blocks instead of a plain string.  We normalise both cases here.
+    Includes automatic fallback to gemini-3.5-flash-lite on 429 quota exhaustion or model errors.
     """
     messages = [SystemMessage(content=system), HumanMessage(content=human)]
-    response = llm.invoke(messages)
+    try:
+        response = llm.invoke(messages)
+    except Exception as exc:
+        err_str = str(exc)
+        if "RESOURCE_EXHAUSTED" in err_str or "429" in err_str or "NOT_FOUND" in err_str:
+            logger.warning("LLM call encountered %s. Retrying with gemini-3.5-flash-lite...", exc)
+            key = GOOGLE_API_KEY or get_secret("GEMINI_API_KEY", "GOOGLE_API_KEY")
+            fallback_llm = ChatGoogleGenerativeAI(
+                model="gemini-3.5-flash-lite",
+                google_api_key=key,
+                temperature=MODEL_TEMPERATURE,
+                max_output_tokens=MODEL_MAX_TOKENS,
+            )
+            response = fallback_llm.invoke(messages)
+        else:
+            raise
+
     content = response.content
 
     # Newer versions return a list of dicts/strings; flatten to plain text
@@ -78,6 +93,8 @@ def _call_llm(llm: ChatGoogleGenerativeAI, system: str, human: str) -> str:
                 parts.append(block)
             elif isinstance(block, dict):
                 parts.append(block.get("text", ""))
+            elif hasattr(block, "text"):
+                parts.append(str(getattr(block, "text")))
         content = "".join(parts)
 
     return str(content).strip()
