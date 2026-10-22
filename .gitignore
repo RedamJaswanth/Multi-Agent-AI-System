@@ -37,3 +37,8 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Scratch & local projects
+Auspify_Data_Science_Internship/
+drive_dump.html
+scratch_drive.py

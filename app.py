@@ -9,8 +9,8 @@ Run with:
 
 from __future__ import annotations
 
-import time
 import logging
+import time
 from typing import Any
 
 import streamlit as st
@@ -23,9 +23,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from config import APP_TITLE, GOOGLE_API_KEY                  # noqa: E402
-from memory import append_turn, clear_history                  # noqa: E402
-from workflow import stream_workflow_events                     # noqa: E402
+from config import (  # noqa: E402
+    APP_TITLE,
+    MAX_TURNS_LIMIT,
+    get_secret,
+)
+from memory import append_turn, clear_history  # noqa: E402
+from workflow import stream_workflow_events  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +39,7 @@ SAMPLE_TASKS = [
     "What are the latest developments in quantum computing in 2025?",
     "Compare Python and Rust for systems programming with concrete examples.",
     "Explain the CAP theorem with a real-world distributed systems example.",
-    "What is the current stock price and recent news about NVIDIA?",
+    "What is the current market sentiment and latest news about NVIDIA?",
     "Summarise the key ideas behind transformer neural network architecture.",
     "What are the best practices for securing a REST API?",
     "Compare the top large language models available today.",
@@ -52,7 +56,7 @@ body { font-family: 'Inter', sans-serif; }
 [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 { color: #7c3aed !important; }
+[data-testid="stSidebar"] h3 { color: #a78bfa !important; }
 
 /* ── Agent status cards ── */
 .agent-card {
@@ -130,8 +134,8 @@ AGENT_META: dict[str, dict[str, str]] = {
 
 STATUS_LABELS: dict[str, str] = {
     "pending": "⏳ Pending",
-    "running": "⚡ Running",
-    "done":    "✅ Done",
+    "running": "⚡ Running…",
+    "done":    "✅ Complete",
     "skipped": "⏭️ Skipped",
     "error":   "❌ Error",
 }
@@ -156,33 +160,53 @@ def main() -> None:
     _init_session()
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
+    # Resolve API keys
+    active_gemini_key = get_secret("GEMINI_API_KEY", "GOOGLE_API_KEY")
+    active_serper_key = get_secret("SERPER_API_KEY")
+
     # ── Header ────────────────────────────────────────────────────────────────
     st.markdown(
         f"""
-        <h1 style="color:#7c3aed;margin-bottom:4px;">🤖 {APP_TITLE}</h1>
+        <h1 style="color:#a78bfa;margin-bottom:4px;">🤖 {APP_TITLE}</h1>
         <p style="color:#94a3b8;font-size:15px;margin-top:0">
         A production-style multi-agent AI system powered by Google Gemini, LangGraph,
-        and DuckDuckGo Search. The coordinator routes your task intelligently —
-        only invoking web research when genuinely required.
+        Serper API, and DuckDuckGo. The coordinator routes your task intelligently —
+        invoking web research only when required.
         </p>
         """,
         unsafe_allow_html=True,
     )
 
-    # ── API key guard ─────────────────────────────────────────────────────────
-    if not GOOGLE_API_KEY:
-        st.error(
-            "**🔑 GOOGLE_API_KEY not found.**\n\n"
-            "1. Copy `.env.example` → `.env`\n"
-            "2. Paste your Gemini API key (get one free at https://aistudio.google.com/app/apikey)\n"
-            "3. Restart the app with `streamlit run app.py`"
-        )
-        st.stop()
-
     # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
         st.markdown("## 🤖 Agent Status")
         status_container = st.container()
+
+        st.markdown("---")
+        st.markdown("## ⚙️ Service Status")
+        if active_gemini_key:
+            st.markdown("🟢 **Gemini LLM**: `Active`")
+        else:
+            st.markdown("🔴 **Gemini LLM**: `Missing Key`")
+
+        if active_serper_key:
+            st.markdown("🟢 **Search Provider**: `Serper API (Google)`")
+        else:
+            st.markdown("🟡 **Search Provider**: `DuckDuckGo (Fallback)`")
+
+        # Optional custom key override for visitors
+        if not active_gemini_key:
+            with st.expander("🔑 Provide Custom API Key", expanded=True):
+                custom_key = st.text_input(
+                    "Gemini API Key",
+                    type="password",
+                    help="Enter your key from https://aistudio.google.com/app/apikey",
+                )
+                if custom_key:
+                    import os
+                    os.environ["GEMINI_API_KEY"] = custom_key
+                    active_gemini_key = custom_key
+                    st.success("Custom Gemini Key applied!")
 
         st.markdown("---")
         st.markdown("## 📋 Sample Tasks")
@@ -192,7 +216,7 @@ def main() -> None:
                 st.rerun()
 
         st.markdown("---")
-        st.markdown("## 🗑️ Conversation")
+        st.markdown("## 🗑️ Session Management")
         if st.button("Clear Conversation", use_container_width=True):
             st.session_state["conversation_history"] = clear_history()
             st.session_state["last_result"] = None
@@ -200,10 +224,10 @@ def main() -> None:
             st.session_state["agent_statuses"] = {}
             st.rerun()
 
-        st.markdown("---")
+        current_turns = len(st.session_state["conversation_history"]) // 2
         st.markdown(
-            f"**Turns:** {len(st.session_state['conversation_history']) // 2}  \n"
-            f"**Runs:** {st.session_state['run_count']}"
+            f"**Turns:** {current_turns} / {MAX_TURNS_LIMIT}  \n"
+            f"**Total Runs:** {st.session_state['run_count']}"
         )
 
     # ── Render agent status in sidebar ───────────────────────────────────────
@@ -212,6 +236,23 @@ def main() -> None:
         for node in AGENT_META:
             status = agent_statuses.get(node, "pending")
             st.markdown(_render_agent_card(node, status), unsafe_allow_html=True)
+
+    # ── Turn limit check ──────────────────────────────────────────────────────
+    turn_limit_reached = current_turns >= MAX_TURNS_LIMIT
+    if turn_limit_reached:
+        st.warning(
+            f"🛑 **Session limit reached ({current_turns}/{MAX_TURNS_LIMIT} turns)**. "
+            "To protect public API quota, please clear the conversation history using the sidebar button before submitting a new query."
+        )
+
+    # ── API Key check ─────────────────────────────────────────────────────────
+    if not active_gemini_key:
+        st.error(
+            "**🔑 GEMINI_API_KEY / GOOGLE_API_KEY not configured.**\n\n"
+            "1. If running locally, add `GEMINI_API_KEY=your_key` to `.env`.\n"
+            "2. If deployed on Streamlit Cloud, add `GEMINI_API_KEY = \"your_key\"` to **App Settings > Secrets**.\n"
+            "3. Or enter a temporary key in the sidebar under 'Provide Custom API Key'."
+        )
 
     # ── Main content ──────────────────────────────────────────────────────────
     col_left, col_right = st.columns([3, 2], gap="large")
@@ -225,12 +266,13 @@ def main() -> None:
             height=120,
             placeholder="e.g. What are the latest advances in fusion energy research?",
             help="Describe your task clearly. The system will decide whether web research is needed.",
+            disabled=turn_limit_reached or not active_gemini_key,
         )
 
         run_clicked = st.button(
             "🚀 Run Analysis",
             use_container_width=True,
-            disabled=st.session_state["is_running"],
+            disabled=st.session_state["is_running"] or turn_limit_reached or not active_gemini_key,
             type="primary",
         )
 
@@ -292,12 +334,10 @@ def main() -> None:
                     task,
                     conversation_history=st.session_state["conversation_history"],
                 ):
-                    # Merge partial update into accumulated state
                     accumulated.update(partial_state)
 
                     # Update agent status
                     statuses = st.session_state["agent_statuses"]
-                    # Mark previous nodes done
                     seen = False
                     for n in node_order:
                         if n == node_name:
@@ -340,31 +380,24 @@ def main() -> None:
                             f"{icon} **{label}** — Final response ready ({chars} chars)"
                         )
 
-                    # Update progress bar
                     progress = node_progress.get(node_name, 0)
                     progress_bar.progress(min(int(progress * 100), 100))
 
-                    # Warnings
                     for w in accumulated.get("warnings", []):
                         st.session_state["activity_log"].append(f"⚠️ {w}")
 
-                    # Force sidebar re-render (Streamlit reruns on button click,
-                    # but we need intra-loop updates via the placeholder)
                     with status_placeholder.container():
                         for n in node_order:
                             s = st.session_state["agent_statuses"].get(n, "pending")
                             st.markdown(_render_agent_card(n, s), unsafe_allow_html=True)
 
-                # Workflow complete
                 progress_bar.progress(100)
                 st.session_state["last_result"] = accumulated
-                # Persist conversation history
                 st.session_state["conversation_history"] = accumulated.get(
                     "conversation_history",
                     st.session_state["conversation_history"],
                 )
 
-                # Mark all remaining nodes done/skipped
                 final_statuses = st.session_state["agent_statuses"]
                 for n in node_order:
                     if final_statuses.get(n) == "pending":
@@ -373,10 +406,21 @@ def main() -> None:
 
             except Exception as exc:
                 logger.exception("Workflow execution failed: %s", exc)
-                st.session_state["activity_log"].append(f"❌ **Workflow error:** {exc}")
+                err_text = str(exc)
+                if "429" in err_text or "RESOURCE_EXHAUSTED" in err_text or "quota" in err_text.lower():
+                    friendly_error = (
+                        "⚠️ **API Quota Exceeded**: Google Gemini API rate limit reached. "
+                        "Please wait 60 seconds before trying again, or provide a personal API key in the sidebar."
+                    )
+                elif "API_KEY" in err_text:
+                    friendly_error = "🔑 **API Key Missing or Invalid**: Please check your GEMINI_API_KEY configuration."
+                else:
+                    friendly_error = f"⚠️ **Workflow Execution Error**: {exc}"
+
+                st.session_state["activity_log"].append(f"❌ {friendly_error}")
                 st.session_state["last_result"] = {
-                    "error": str(exc),
-                    "final_response": f"⚠️ **Workflow failed:** {exc}",
+                    "error": err_text,
+                    "final_response": friendly_error,
                 }
             finally:
                 st.session_state["is_running"] = False
@@ -388,11 +432,9 @@ def main() -> None:
     if result:
         st.markdown("---")
 
-        # Error banner
         if result.get("error"):
-            st.error(f"**Error:** {result['error']}")
+            st.error(f"**Error Details:** {result['error']}")
 
-        # Metric strip
         decision = result.get("coordinator_decision", "—")
         researched = "Yes" if result.get("source_urls") else "No"
         n_sources = len(result.get("source_urls", []))
@@ -410,17 +452,12 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-        # Final response
         if result.get("final_response"):
             st.markdown("### 📄 Final Response")
-            st.markdown(
-                '<div class="response-card">',
-                unsafe_allow_html=True,
-            )
+            st.markdown('<div class="response-card">', unsafe_allow_html=True)
             st.markdown(result["final_response"])
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # Research expandable
         if result.get("research_findings") and result.get("source_urls"):
             with st.expander("🔍 Research Findings", expanded=False):
                 st.markdown(result["research_findings"])
@@ -430,12 +467,10 @@ def main() -> None:
                 for i, url in enumerate(result["source_urls"], 1):
                     st.markdown(f"{i}. [{url}]({url})")
 
-        # Analysis expandable
         if result.get("analysis"):
             with st.expander("🧠 Analysis Details", expanded=False):
                 st.markdown(result["analysis"])
 
-        # Warnings
         if result.get("warnings"):
             with st.expander("⚠️ Warnings", expanded=False):
                 for w in result["warnings"]:

@@ -2,38 +2,78 @@
 tools.py
 --------
 Tool wrappers used by the Research Agent.
-
-DuckDuckGo search is performed with the duckduckgo-search library (v8.x).
-The public API uses DDGS as a context manager and returns results as dicts.
+Supports Serper API (google-serper) with seamless fallback to DuckDuckGo search.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
+import requests
 from ddgs import DDGS
 
-from config import MAX_SEARCH_RESULTS, SEARCH_REGION
+from config import MAX_SEARCH_RESULTS, SEARCH_REGION, get_secret
 
 logger = logging.getLogger(__name__)
 
 
+def serper_search(query: str, max_results: int = MAX_SEARCH_RESULTS) -> list[dict[str, Any]]:
+    """
+    Perform a fast Google web search via Serper API.
+    Returns a list of dicts with title, href, and body.
+    """
+    api_key = get_secret("SERPER_API_KEY")
+    if not api_key:
+        return []
+
+    url = "https://google.serper.dev/search"
+    payload = json.dumps({"q": query.strip(), "num": max_results})
+    headers = {
+        "X-API-KEY": api_key,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = requests.post(url, headers=headers, data=payload, timeout=8)
+        if response.status_code == 200:
+            data = response.json()
+            results: list[dict[str, Any]] = []
+            for item in data.get("organic", [])[:max_results]:
+                results.append({
+                    "title": item.get("title", "Untitled"),
+                    "href": item.get("link", ""),
+                    "body": item.get("snippet", ""),
+                })
+            logger.info("Serper returned %d results for query: %s", len(results), query[:80])
+            return results
+        else:
+            logger.warning("Serper request returned status %d: %s", response.status_code, response.text[:200])
+    except Exception as exc:
+        logger.warning("Serper search failed, falling back to DuckDuckGo: %s", exc)
+
+    return []
+
+
 def web_search(query: str, max_results: int = MAX_SEARCH_RESULTS) -> list[dict[str, Any]]:
     """
-    Perform a DuckDuckGo text search and return a list of result dicts.
-
-    Each dict contains:
+    Perform a web search using Serper API (if configured) or DuckDuckGo.
+    Returns a list of result dicts:
         - title  : str
         - href   : str  (source URL)
         - body   : str  (snippet)
-
-    Returns an empty list on any failure.
     """
     if not query or not query.strip():
         logger.warning("web_search called with empty query – skipping.")
         return []
 
+    # 1. Try Serper API first if key is present
+    serper_results = serper_search(query, max_results=max_results)
+    if serper_results:
+        return serper_results
+
+    # 2. Fallback to DuckDuckGo search
     try:
         with DDGS() as ddgs:
             results: list[dict[str, Any]] = list(

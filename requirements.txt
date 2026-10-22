@@ -1,22 +1,23 @@
 # AI Multi-Agent Research and Analysis System
 # ============================================
-# Pinned to stable, mutually compatible versions (Python 3.12)
 
-# ── Core AI / LangGraph stack ─────────────────────────────────────────────────
+# ── Core Multi-Agent Stack ───────────────────────────────────────────────────
 langgraph==1.2.11
 langchain==1.4.2
 langchain-core==1.6.3
 langchain-google-genai==4.4.0
+google-genai>=1.0.0
+autogen-agentchat==0.4.7
+autogen-core==0.4.7
 
-# ── Search ────────────────────────────────────────────────────────────────────
-ddgs>=1.0.0                    # replaces duckduckgo-search (renamed)
+# ── Web Search & APIs ─────────────────────────────────────────────────────────
+ddgs>=1.0.0                     # DuckDuckGo search
+requests>=2.31.0                # Serper API integration
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
-streamlit==1.64.0
+streamlit>=1.35.0
 
-# ── Environment / configuration ───────────────────────────────────────────────
+# ── Configuration & Testing ───────────────────────────────────────────────────
 python-dotenv==1.2.3
-
-# ── Testing ───────────────────────────────────────────────────────────────────
 pytest==8.3.5
 pytest-mock==3.14.0

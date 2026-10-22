@@ -23,10 +23,10 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from config import (
-    GOOGLE_API_KEY,
     GEMINI_MODEL,
     MODEL_TEMPERATURE,
     MODEL_MAX_TOKENS,
+    get_secret,
 )
 from memory import format_history_for_prompt
 from state import AgentState
@@ -39,18 +39,22 @@ from tools import (
 
 logger = logging.getLogger(__name__)
 
+# Module-level alias for backward compatibility and test patching
+GOOGLE_API_KEY: str | None = get_secret("GEMINI_API_KEY", "GOOGLE_API_KEY")
+
 # ── Shared model factory ──────────────────────────────────────────────────────
 
 def _get_llm() -> ChatGoogleGenerativeAI:
     """Instantiate the Gemini model (raises if key is missing)."""
-    if not GOOGLE_API_KEY:
+    key = GOOGLE_API_KEY or get_secret("GEMINI_API_KEY", "GOOGLE_API_KEY")
+    if not key:
         raise EnvironmentError(
-            "GOOGLE_API_KEY is not set. "
-            "Please create a .env file following .env.example."
+            "GEMINI_API_KEY (or GOOGLE_API_KEY) is not set. "
+            "Please configure it in Streamlit Secrets or your local .env file."
         )
     return ChatGoogleGenerativeAI(
         model=GEMINI_MODEL,
-        google_api_key=GOOGLE_API_KEY,
+        google_api_key=key,
         temperature=MODEL_TEMPERATURE,
         max_output_tokens=MODEL_MAX_TOKENS,
     )

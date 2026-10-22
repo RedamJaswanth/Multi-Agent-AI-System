@@ -2,7 +2,7 @@
 config.py
 ---------
 Centralised configuration and environment loading.
-All sensitive values are read exclusively from environment variables.
+All sensitive values are read exclusively from environment variables or Streamlit secrets.
 """
 
 from __future__ import annotations
@@ -27,25 +27,47 @@ for _noisy in ("httpx", "httpcore", "urllib3", "duckduckgo_search"):
 
 logger = logging.getLogger(__name__)
 
-# ── API keys ──────────────────────────────────────────────────────────────────
-GOOGLE_API_KEY: str | None = os.getenv("GOOGLE_API_KEY")
 
-if not GOOGLE_API_KEY:
-    logger.warning(
-        "GOOGLE_API_KEY is not set. "
-        "Create a .env file with GOOGLE_API_KEY=<your-key> to enable model inference."
-    )
+def get_secret(key_name: str, fallback_key: str | None = None) -> str | None:
+    """
+    Safely retrieve a configuration value or secret from environment variables
+    or Streamlit Secrets (for Streamlit Community Cloud).
+    """
+    # 1. Environment variable
+    val = os.getenv(key_name)
+    if not val and fallback_key:
+        val = os.getenv(fallback_key)
+    if val:
+        return val
+
+    # 2. Streamlit secrets
+    try:
+        import streamlit as st
+
+        if hasattr(st, "secrets"):
+            if key_name in st.secrets:
+                return str(st.secrets[key_name])
+            if fallback_key and fallback_key in st.secrets:
+                return str(st.secrets[fallback_key])
+    except Exception:
+        pass
+
+    return None
+
+
+# ── API keys ──────────────────────────────────────────────────────────────────
+GOOGLE_API_KEY: str | None = get_secret("GEMINI_API_KEY", "GOOGLE_API_KEY")
+SERPER_API_KEY: str | None = get_secret("SERPER_API_KEY")
 
 # ── Model configuration ───────────────────────────────────────────────────────
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 MODEL_TEMPERATURE: float = float(os.getenv("MODEL_TEMPERATURE", "0.3"))
 MODEL_MAX_TOKENS: int = int(os.getenv("MODEL_MAX_TOKENS", "4096"))
 
-# ── Research configuration ────────────────────────────────────────────────────
+# ── Quota & Safeguards ───────────────────────────────────────────────────────
+MAX_TURNS_LIMIT: int = int(os.getenv("MAX_TURNS_LIMIT", "10"))
 MAX_SEARCH_RESULTS: int = int(os.getenv("MAX_SEARCH_RESULTS", "5"))
 SEARCH_REGION: str = os.getenv("SEARCH_REGION", "wt-wt")   # worldwide
-
-# ── Workflow safeguards ───────────────────────────────────────────────────────
 MAX_RECURSION_LIMIT: int = int(os.getenv("MAX_RECURSION_LIMIT", "25"))
 
 # ── Application metadata ──────────────────────────────────────────────────────
